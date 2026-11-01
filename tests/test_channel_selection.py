@@ -12,6 +12,7 @@ from constants import MAX_INT, PriorityMode, State
 from inventory import DropsCampaign
 from twitch import Twitch
 
+from exceptions import GQLException, MinerException
 
 NOW = datetime(2026, 10, 11, 12, tzinfo=timezone.utc)
 ALPHA = {"id": "101", "name": "Alpha", "boxArtURL": ""}
@@ -478,6 +479,21 @@ class MiningLoopSelectionTests(SelectionTestCase):
         self.twitch.change_state(State.GAMES_UPDATE)
         await asyncio.wait_for(self.twitch._state_change.blocked.wait(), 5)
         self.assertIs(self.twitch.get_active_campaign(), waiting)
+
+    async def test_transient_directory_error_does_not_crash_channel_selection(self):
+        self.add_campaign(ALPHA)
+        self.add_campaign(BETA)
+        self.live(BETA, (2, 10))
+        original_get_live_streams = self.twitch.get_live_streams
+
+        async def faulty_get_live_streams(game, **kwargs):
+            if game.name == "Alpha":
+                raise MinerException("Transient GQL service error")
+            return await original_get_live_streams(game, **kwargs)
+
+        self.twitch.get_live_streams = faulty_get_live_streams
+        # Should not raise MinerException, and should successfully select and mine Beta
+        self.assertEqual(await self.select(), (["Alpha", "Beta"], 2))
 
 
 class AutoSelectLinkedTests(SelectionTestCase):

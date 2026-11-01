@@ -825,14 +825,19 @@ class Twitch:
                             no_acl.add(campaign.game)
                 # Recheck retained ACL channels too; a missed PubSub event must not
                 # leave an offline channel stale until the next inventory reload.
-                await self.bulk_check_online(acl_channels)
+                try:
+                    await self.bulk_check_online(acl_channels)
+                except (GQLException, MinerException) as exc:
+                    logger.warning(f"Failed to check ACL channels online: {exc}")
                 new_channels.difference_update(acl_channels)
                 new_channels.update(acl_channels)
                 for game in no_acl:
                     # for every campaign without an ACL, for it's game,
                     # add a list of live channels with drops enabled
-                    new_channels.update(await self.get_live_streams(game, drops_enabled=True))
-                # sort them descending by viewers, by priority and by game priority
+                    try:
+                        new_channels.update(await self.get_live_streams(game, drops_enabled=True))
+                    except (MinerException, GQLException) as exc:
+                        logger.warning(f"Failed to fetch live streams for {game.name}: {exc}")
                 # NOTE: Viewers sort also ensures ONLINE channels are sorted to the top
                 # NOTE: We can drop using the set now, because there's no more channels being added
                 ordered_channels: list[Channel] = sorted(
