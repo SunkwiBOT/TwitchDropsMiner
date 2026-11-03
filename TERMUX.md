@@ -79,6 +79,11 @@ bash push.sh verifyboot # 冷停 → 跑钩子 → 断言端口回来（含 auto
 
 验收（真机 531px）：页签「历史」显示 6 件，和你截图里的已领取列表一一对应——Warframe #1 组 1 件（Random TF Archon Shard）、Apex Legends #2 组 4 件（`"Respawning"` Holospray、APEX Pack ×2、Charge Rifle Skin）、Minecraft #3 空组、World of Warships 组 1 件（Update 15.9 Mission #3）；没有「未归类」。图片、领取时间、优先徽章和筛选均正常，无横向溢出。
 
+## About 与中文翻译修正（2026-11-03 22:13）
+
+- About 页改正为：应用作者 DevilXD / 上游仓库 DevilXD/TwitchDropsMiner / 基线 fork Valentin-Metz/TwitchDropsMiner / 本仓库 bplhkx/TwitchDropsMiner / 核心版本 v16.dev / 面板 Termux Web Panel。
+- 上游 `lang/简体中文.json` 缺少 `gui.settings.general.unlinked_campaigns`，导致设置页显示英文；已补「允许挖掘未关联账户的活动」。该翻译随 `_.set_language` 在启动时加载，改完需重启（本次已重启）。
+
 ## 活动刷新频率与历史堆叠（2026-11-03）
 
 - 设置页新增「掉宝活动刷新频率（分钟）」，写入设备侧 `$APP/catalog.config.json`：`{"interval_seconds": 600}`，范围 300–86400 秒（UI 5–1440 分钟）。`catalog.configured_interval()` 按文件 mtime 热加载；公开目录 API 的请求下限仍是 310 秒。核心每 5 分钟探测一次，所以实际生效最多再晚 5 分钟。

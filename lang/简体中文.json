@@ -136,7 +136,8 @@
                 "tray_notifications": "启用托盘通知",
                 "dark_mode": "夜间模式",
                 "priority_mode": "掉宝挖掘模式",
-                "proxy": "代理地址（需要重启）："
+                "proxy": "代理地址（需要重启）：",
+                "unlinked_campaigns": "允许挖掘未关联账户的活动"
             },
             "advanced": {
                 "name": "高级设置",
