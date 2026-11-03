@@ -173,6 +173,7 @@ bash push.sh follow
 | `cookies.jar` | Twitch 会话（aiohttp CookieJar JSON），**等同账号凭据** |
 | `history.json` | 已领取掉宝历史（version 2，`source=claimed`） |
 | `history_game_map.json` | 旧奖励的手动游戏归属表 |
+| `claimed_drops.json` | 成功 claim 过的 drop id；避免 Twitch 反复报告可领取导致重复请求/日志 |
 | `catalog.cache.json` | 公开掉宝目录缓存 |
 | `log.txt` | 核心日志 |
 | `logs/server.log` | supervisor / run.py 控制台日志 |
@@ -229,6 +230,7 @@ git merge upstream/master
 - 链接公开目录只能提供公开活动元数据，且免费档限流；目录不可用时依赖缓存。
 - 旧奖励的 `game` 在 Twitch 流水里是 `null`，活动过期后无法可靠自动归组；用 `history_game_map.json` 手动归属，否则进「未归类」。
 - 面板只能记录 Twitch 侧的“已领取”，无法知道奖励是否已经到账游戏内。
+- 少数活动会在 Twitch Inventory 里反复报告 `can_claim`，但 claim 已成功且不进 `gameEventDrops`；面板用 `claimed_drops.json` 记住已 claim 的 drop，阻止重复请求和日志刷屏。
 - Android 没有系统托盘；`autostart_tray` 不生效，托盘通知映射为浏览器通知。
 - 本项目是个人 fork，不提供任何账号安全/封号风险担保；请遵守 Twitch 服务条款。
 

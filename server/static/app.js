@@ -1143,13 +1143,18 @@
     $('log-count').textContent = String(body.childElementCount);
   }
 
+  let logsBusy = false;
   async function refreshLogs() {
+    if (logsBusy) return;
+    logsBusy = true;
     try {
       const data = await api(`/api/logs?since=${logSeq}`);
       logSeq = data.seq;
       if (data.lines && data.lines.length) appendLogLines(data.lines);
     } catch (e) {
       /* 日志拉取失败不打扰用户 */
+    } finally {
+      logsBusy = false;
     }
   }
 

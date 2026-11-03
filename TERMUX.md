@@ -79,6 +79,21 @@ bash push.sh verifyboot # 冷停 → 跑钩子 → 断言端口回来（含 auto
 
 验收（真机 531px）：页签「历史」显示 6 件，和你截图里的已领取列表一一对应——Warframe #1 组 1 件（Random TF Archon Shard）、Apex Legends #2 组 4 件（`"Respawning"` Holospray、APEX Pack ×2、Charge Rifle Skin）、Minecraft #3 空组、World of Warships 组 1 件（Update 15.9 Mission #3）；没有「未归类」。图片、领取时间、优先徽章和筛选均正常，无横向溢出。
 
+## 重复领取日志修复（2026-11-03 21:52）
+
+**症状**：运行日志反复出现同一批 `Claimed drop: ...`（ARKNIGHTS Sanctuary of Ink 5 条、ARC Raiders Frozen Trail 2 条），每次库存刷新来一轮；旧 log.txt 累计 1600+ 条。
+
+**根因**：上游 `GAMES_UPDATE` 每次库存刷新都会对 `can_claim` 的 drop 调 `claim()`；这几个 drop 在 Twitch Inventory 里一直报 `can_claim`/未领取，但 claim 又返回成功（`ELIGIBLE_FOR_ALL` / `DROP_INSTANCE_ALREADY_CLAIMED`），且不出现在 `gameEventDrops`。公开目录让库存刷新变成约 10 分钟一次，于是同一批 claim 日志反复刷。
+
+**修法**（不改上游 `.py`）：新增 `claims.py`，`run.py` 里 `claims.install(Twitch, TimedDrop)`：
+- `TimedDrop.claim`：成功 claim 过的 drop id 直接返回 True，不再请求/打日志；
+- `TimedDrop.can_claim`：已记住的 id 返回 False，GAMES_UPDATE 循环直接跳过；
+- `Twitch.process_drops`：drop-claim 事件对应已记住/已领取的 drop 时忽略，避免重复 sleep/切台；
+- 记录持久化在 `$APP/claimed_drops.json`（设备侧，push 排除），重启不丢；本次已把当前 12 个已领取 drop 预置进去。
+- 前端 `/api/logs` 轮询加了 busy 锁，避免慢请求重叠导致同批日志追加两次。
+
+验收：重启后 + 手动 `POST /api/reload` 强制库存刷新，`Claimed drop` 新增 0 条，`claimed_drops.json` 保持 12 个 id；核心正常回到 CHANNEL_SWITCH/IDLE。注意：这几个 drop 仍不会出现在 Twitch「已领取」列表里，这是 Twitch 侧的数据不一致；本修复只阻止重复请求和日志刷屏。
+
 ## 必须记住的坑
 
 1. **客户端类型**：fork 默认 `ClientType.ANDROID_APP`（`twitch.py:531`），Twitch 不给它下发设备码 → `/oauth2/device` 响应无 `device_code` → `_oauth_login` 抛 `KeyError` 崩溃循环。`run.py` 运行时覆盖成 `ClientType.SMARTBOX`。Token 与 client_id 绑定，`_validate` 发现不匹配会清空 cookies.jar 重登。

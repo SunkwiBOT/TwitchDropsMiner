@@ -42,6 +42,11 @@ catalog.install(Twitch)
 import history  # noqa: E402
 history.install_inventory(Twitch)
 
+# 去重：记住成功 claim 过的 drop id，避免 Twitch 每次库存刷新都重打 Claimed drop
+import claims  # noqa: E402
+from inventory import TimedDrop  # noqa: E402
+claims.install(Twitch, TimedDrop)
+
 from server import api  # noqa: E402
 
 
