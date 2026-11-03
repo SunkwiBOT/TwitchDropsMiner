@@ -12,6 +12,8 @@ import asyncio
 import logging
 import time
 from collections import deque
+
+import logi18n
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
@@ -419,7 +421,7 @@ class LogHandler(logging.Handler):
 
     def emit(self, record):
         try:
-            self._manager.print(self.format(record))
+            self._manager.print_log(record.levelname, record.getMessage())
         except Exception:
             pass
 
@@ -489,9 +491,20 @@ class GUIManager:
         return await coro
 
     # --- 数据入口 ---------------------------------------------------
-    def print(self, message: str):
+    def _append_log(self, level: str, text: str):
         self.log_seq += 1
-        self.logs.append({"seq": self.log_seq, "at": time.time(), "text": str(message)})
+        self.logs.append({
+            "seq": self.log_seq,
+            "at": time.time(),
+            "level": level,
+            "text": logi18n.translate(text),
+        })
+
+    def print(self, message: str):
+        self._append_log("", str(message))
+
+    def print_log(self, level: str, message: str):
+        self._append_log(str(level or ""), str(message))
 
     def save(self, *, force: bool = False) -> None:
         """对齐 gui.GUIManager.save：上游在状态切换/退出时把 settings.json 落盘。

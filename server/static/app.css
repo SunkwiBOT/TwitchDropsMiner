@@ -1390,3 +1390,50 @@ main {
   font-size: 11.5px;
   font-weight: 600;
 }
+
+/* 运行日志：级别徽章 */
+.log-line {
+  align-items: flex-start;
+}
+
+.log-level {
+  flex: 0 0 auto;
+  margin-right: 6px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  font-size: 10.5px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.log-level.info {
+  color: #8ab4f8;
+}
+
+.log-level.warning {
+  color: #fdd663;
+}
+
+.log-level.error {
+  color: #ffb3b1;
+  background: rgba(235, 4, 0, 0.14);
+}
+
+.log-level.call,
+.log-level.debug {
+  color: #9aa0a6;
+}
+
+body.light .log-level.info {
+  color: #1a73e8;
+}
+
+body.light .log-level.warning {
+  color: #a05a00;
+}
+
+body.light .log-level.error {
+  color: #b3261e;
+  background: rgba(179, 38, 30, 0.10);
+}

@@ -79,6 +79,14 @@ bash push.sh verifyboot # 冷停 → 跑钩子 → 断言端口回来（含 auto
 
 验收（真机 531px）：页签「历史」显示 6 件，和你截图里的已领取列表一一对应——Warframe #1 组 1 件（Random TF Archon Shard）、Apex Legends #2 组 4 件（`"Respawning"` Holospray、APEX Pack ×2、Charge Rifle Skin）、Minecraft #3 空组、World of Warships 组 1 件（Update 15.9 Mission #3）；没有「未归类」。图片、领取时间、优先徽章和筛选均正常，无横向溢出。
 
+## 运行日志中文化（2026-11-03 22:40）
+
+面板的「运行日志」之前混着核心英文日志（Checking login / Websocket connected / Claimed drop 等），而且 `LogHandler` 把时间+级别再套了一层，显示成双时间戳。现在：
+- `webgui.LogHandler` 只上传 `record.levelname` + `record.getMessage()`，不再拼时间/级别；前端统一显示 `时间 + 中文级别 + 消息`。
+- 新增 `logi18n.py`：仅简体中文界面生效，按整行精确匹配 + 正则模板翻译登录、WebSocket、频道状态、掉宝进度/领取、活动目录、历史/去重缓存、常见错误；频道/游戏/活动/掉宝名和错误详情原样保留，未匹配的英文行原样显示，后续可继续补。
+- `log.txt` 仍是英文原文（FileHandler 独立），方便排查；面板只翻译显示层。
+- 级别徽章：信息 / 警告 / 错误 / 调试 / 调用；浅色模式有独立颜色。
+
 ## About 与中文翻译修正（2026-11-03 22:13）
 
 - About 页改正为：应用作者 **bplhkx**（链接到 github.com/bplhkx）/ 上游仓库 DevilXD/TwitchDropsMiner / 基线 fork Valentin-Metz/TwitchDropsMiner / 本仓库 bplhkx/TwitchDropsMiner / 核心版本 v16.dev / 面板 Termux Web Panel；捐赠行已按用户要求删除。

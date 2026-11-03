@@ -1201,9 +1201,18 @@
   function appendLogLines(lines) {
     const body = $('log-body');
     const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+    const levelLabels = {
+      INFO: U('log_info'), WARNING: U('log_warning'), ERROR: U('log_error'),
+      DEBUG: U('log_debug'), CALL: U('log_call'),
+    };
     lines.forEach((line) => {
       const row = el('div', 'log-line');
       row.appendChild(el('span', 't', fmtTime(line.at)));
+      const level = String(line.level || '').toUpperCase();
+      if (level) {
+        row.appendChild(el('span', 'log-level ' + level.toLowerCase(),
+          levelLabels[level] || level));
+      }
       row.appendChild(el('span', null, line.text));
       body.appendChild(row);
     });
