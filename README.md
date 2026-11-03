@@ -1,282 +1,244 @@
-# Twitch Drops Miner
+# TwitchDropsMiner — Termux 网页面板分支
 
-## Run this fork in Docker
+在 Android / Termux 里**原生**运行 [TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner)，并把原本依赖 tkinter 的桌面界面换成一套可用的中文 Web 面板。不需要 X11 / Xvfb，不需要真 Chrome，也不是 proot/chroot。
 
-This fork packages the GUI application with Xvfb so it can run without a physical display. It also sends status and drop progress to standard output, exposes an event-loop heartbeat as a Docker health check, and publishes a rolling `master` image for Linux AMD64 and ARM64 in the [fork's public GHCR package](https://github.com/Valentin-Metz/TwitchDropsMiner/pkgs/container/twitchdropsminer).
+> A headless, Termux-native fork of TwitchDropsMiner with a full Chinese web panel.
 
-The login and settings screens still need a real display. Run the desktop application once outside Docker to create the two files used by the container.
+- 上游核心：[DevilXD/TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner)（MIT）
+- 本分支基线：[Valentin-Metz/TwitchDropsMiner](https://github.com/Valentin-Metz/TwitchDropsMiner)（commit `726099f`，`__version__ = 16.dev`）
+- 本仓库：[bplhkx/TwitchDropsMiner](https://github.com/bplhkx/TwitchDropsMiner)
 
-### 1. Create `cookies.jar` and `settings.json`
-
-1. On a computer with a desktop, either [download the latest upstream release](https://github.com/DevilXD/TwitchDropsMiner/releases) or run this checkout from source.
-2. Start the application outside Docker, log in to Twitch, choose the games and settings you want, and press **Reload** once to confirm that mining starts.
-3. Close the application normally. A successful login writes `cookies.jar`; a clean shutdown writes `settings.json`.
-4. Copy both files to a dedicated directory on the Docker host. They are beside the executable or `main.py`; a macOS app stores them under `Twitch Drops Miner (by DevilXD).app/Contents/MacOS`.
-
-This fork enables **Allow mining unlinked campaigns** and selects **Ending soonest** as the default priority mode. Games in the priority list remain first; every other eligible linked or unlinked campaign follows in campaign-end order. Add unwanted games to **Exclude**. Choosing **Priority list only** instead makes the list a strict allowlist: every unlisted campaign is skipped regardless of connection status. Existing values in `settings.json` are preserved, so select **Ending soonest** explicitly when reusing an older file or one created by an upstream desktop build. The unlinked-campaign checkbox is fork-only and appears under **Settings > General** when running this checkout from source.
-
-On the Docker host, enter that directory and confirm that both paths are regular files:
-
-```bash
-cd /path/to/twitch-drops-miner
-test -f cookies.jar && test -f settings.json
-chmod 600 cookies.jar settings.json
-```
-
-Do not replace either file with an empty file. With Docker's `-v` syntax, a missing host path is created as a directory, which the miner cannot use as a file. See Docker's [bind-mount documentation](https://docs.docker.com/engine/storage/bind-mounts/). Treat `cookies.jar` as a password because it contains the saved Twitch session.
-
-### 2. Start the miner
-
-Run this command from the directory containing `cookies.jar` and `settings.json`:
-
-```bash
-docker run -itd --init --pull=always --restart=always --network=host --label autoheal=true --label autoheal.stop.timeout=30 -v ./cookies.jar:/TwitchDropsMiner/cookies.jar -v ./settings.json:/TwitchDropsMiner/settings.json:ro --name twitch_drops_miner ghcr.io/valentin-metz/twitchdropsminer:master
-```
-
-The cookie file is mounted read-write so the miner can refresh the session. The settings file is mounted read-only, making the desktop-generated configuration the source of truth. To change settings later, stop the container, update `settings.json` with the desktop application, then start the container again.
-
-`--pull=always` fetches the current image when `docker run` creates the container. The image's command exits at the next clock-hour boundary, so keep `--restart=always` to start the next mining cycle and to recover after a process failure or Docker daemon restart.
-
-> [!IMPORTANT]
-> The application and its filesystem run in a container, but networking is not isolated: `--network=host` shares the host's network namespace. Host networking works on Docker Engine for Linux; Docker Desktop 4.34 or later requires it to be enabled in **Settings > Resources > Network**. See Docker's [host-network documentation](https://docs.docker.com/engine/network/drivers/host/).
-
-> [!TIP]
-> On an SELinux-enforcing host, add a private relabel option to both mounts if Docker reports a permission error: use `cookies.jar:/TwitchDropsMiner/cookies.jar:Z` and `settings.json:/TwitchDropsMiner/settings.json:ro,Z`.
-
-### 3. Check the container
-
-Follow the timestamped miner output and inspect the health status with:
-
-```bash
-docker logs -f twitch_drops_miner
-docker inspect --format '{{.State.Health.Status}}' twitch_drops_miner
-```
-
-An initial `starting` status is normal during login and inventory loading. Once initialization succeeds, the event loop replaces the heartbeat every 30 seconds. A heartbeat that is at least 120 seconds old fails the health check; three consecutive failures change the container status to `unhealthy`. Docker records that status but does not restart the container solely because it is unhealthy. The restart policy applies when the container process exits.
-
-### 4. Restart unhealthy miners with Autoheal
-
-The miner command above opts in with `--label autoheal=true`. Run [Autoheal](https://github.com/willfarrell/docker-autoheal) to restart only labeled containers that reach Docker's `unhealthy` state:
-
-```bash
-docker run -d \
-  --name autoheal \
-  --restart=always \
-  --network=none \
-  -e AUTOHEAL_CONTAINER_LABEL=autoheal \
-  -e AUTOHEAL_INTERVAL=30 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /etc/localtime:/etc/localtime:ro \
-  willfarrell/autoheal:1.1.0
-```
-
-Autoheal checks every 30 seconds. When the miner becomes unhealthy, it stops and restarts it; `--label autoheal.stop.timeout=30` gives the miner up to 30 seconds to stop cleanly before Docker kills it. `--network=none` is sufficient because Autoheal reaches Docker through the mounted Unix socket, and the read-only `/etc/localtime` mount keeps its log timestamps aligned with the host.
-
-> [!WARNING]
-> Mounting `/var/run/docker.sock` gives Autoheal control over the Docker daemon. Treat access to the Autoheal container as privileged host access; see Docker's [daemon attack-surface guidance](https://docs.docker.com/engine/security/#docker-daemon-attack-surface).
-
-### 5. Configure automatic updates with Watchtower
-
-`--pull=always` does not update an existing container. To follow new `master` images from the [fork package](https://github.com/Valentin-Metz/TwitchDropsMiner/pkgs/container/twitchdropsminer), run [NickFedor Watchtower](https://watchtower.nickfedor.com/latest/configuration/introduction/) alongside the miner:
-
-```bash
-docker run -d \
-  --name watchtower \
-  --restart unless-stopped \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  nickfedor/watchtower:latest \
-  --interval 3600 \
-  --cleanup \
-  --include-restarting \
-  twitch_drops_miner
-```
-
-The positional container name limits Watchtower to `twitch_drops_miner`; it ignores other containers. Every hour, Watchtower checks the rolling tag, pulls a changed image, and recreates the miner with its existing bind mounts, network mode, and restart policy. `--cleanup` removes the old image after an update. `--include-restarting` lets Watchtower update the miner during a restart cycle. See the official documentation for [scheduling](https://watchtower.nickfedor.com/latest/configuration/scheduling/), [update behavior](https://watchtower.nickfedor.com/latest/configuration/update-behavior/), and [container selection](https://watchtower.nickfedor.com/latest/configuration/container-selection/).
-
-> [!WARNING]
-> Mounting `/var/run/docker.sock` gives Watchtower control over the Docker daemon. Treat access to either helper container as privileged host access; see Docker's [daemon attack-surface guidance](https://docs.docker.com/engine/security/#docker-daemon-attack-surface).
-
-> [!NOTE]
-> The rest of this README is inherited from [DevilXD's upstream project](https://github.com/DevilXD/TwitchDropsMiner). Its **Project goals** section says that Docker and remote 24/7 deployment are outside upstream's scope. This fork adds the Xvfb container, stdout diagnostics, a heartbeat health check, GHCR publishing, and a scheduled upstream rebase.
+上游 `.py` 业务代码保持原样；所有改动都是新增文件，加上 `run.py` 里的运行时补丁。
 
 ---
 
-This application allows you to AFK mine timed Twitch drops, without having to worry about switching channels when the one you were watching goes offline, claiming the drops, or even receiving the stream data itself. This helps you save on bandwidth and hassle.
+## 功能
 
-### How It Works:
+- **纯 Termux 进程**：`run.py` 直接在 Termux 的 Python 里跑核心，Flask 面板在另一个线程；没有桌面、Docker 或虚拟显示依赖。
+- **设备码登录**：强制使用 `ClientType.SMARTBOX`，登录走 Twitch 设备码，不依赖 zendriver/Chrome。登录会话保存在 `cookies.jar`。
+- **全功能中文面板**：主面板 / 掉宝库存 / 历史 / 设置 / 帮助五个页签，文案来自上游 `lang/*.json`，支持 20+ 种语言切换。
+- **主面板掉宝进度置顶**：游戏封面、当前掉宝奖励图、活动/掉宝进度方格、秒级倒计时，以及**本次已领取的物品**。
+- **掉宝库存**：上游同款 5 个筛选、活动卡、ACL 频道、奖励图与进度，筛选状态存浏览器 localStorage。
+- **历史掉宝**：记录 Twitch「已领取」流水（`gameEventDrops`），活动过期、重启、Twitch 六个月列表刷新都不丢；按优先列表分组，支持手动游戏归属。
+- **完整设置面**：语言、开机自启、托盘通知（映射为浏览器通知）、夜间模式、未关联活动、挖掘模式、代理、连接质量、优先/排除列表、刷新库存。
+- **Termux 运维脚本**：一条命令完成打包/推送/安装/启停/状态/开机自启/冷启验证。
+- **开机自启**：Magisk `/data/adb/service.d` 钩子，面板里可开关；`push.sh verifyboot` 做冷停恢复验收。
+- **移动优先**：531px 宽度下无横向溢出，按钮触控尺寸和进度方格按手机调过。
 
-About every 20 seconds, the application fetches the selected stream's playlist and sends HEAD requests for its video chunks. These requests advance drops without downloading the video or audio. A websocket connection tracks streams going online or offline and viewer-count changes.
+> 桌面托盘（最小化、托盘菜单）在 Android 上不存在；对应设置保留说明但不生效。Docker/PyInstaller 相关文件仍是上游的，本分支不以保证它们可用。
 
-### Features:
+---
 
-- Stream-less drop mining - save on bandwidth.
-- Game priority and exclusion lists, allowing you to focus on mining what you want, in the order you want, and ignore what you don't want.
-- Sharded websocket connection, allowing for tracking up to `199` channels at the same time.
-- Automatic drop campaigns discovery based on linked accounts (requires you to do [account linking](https://www.twitch.tv/drops/campaigns) yourself though).
-- Stream tags and drop campaign validation, to ensure you won't end up mining a stream that can't earn you the drop.
-- Automatic channel stream switching, when the one you were currently watching goes offline, as well as when a channel streaming a higher priority game goes online.
-- Login session is saved in a cookies file, so you don't need to login every time.
-- Mining is automatically started as new campaigns appear, and stopped when the last available drops have been mined.
+## 结构
 
-### Usage:
+```text
+tdm-vm/
+├── run.py                 # 入口：假 GUI + 设备码登录 + 核心 + Flask 线程
+├── webgui.py              # 签名对齐 gui.py 的假 GUI，捕获状态/频道/活动/日志/通知
+├── catalog.py             # 公开掉宝目录回退（补 SMARTBOX 看不到新活动的缺陷）
+├── history.py             # Twitch「已领取」流水落盘、按游戏分组、手动归属表
+├── server/
+│   ├── api.py             # Flask 路由、鉴权、设置写入、i18n
+│   ├── templates/         # index / login / setup
+│   └── static/            # app.css / app.js（无 CDN）
+├── termux/
+│   ├── push.sh            # PC 侧控制入口
+│   ├── install.sh         # 设备侧安装（venv + pip + 初始文件）
+│   ├── supervise.sh       # 守护 run.py，退出/崩溃自动拉起
+│   ├── tdm-*.sh           # start/stop/status/env/pids
+│   ├── boot-*.sh          # 开机自启与冷启验收
+│   ├── twitchdrops-termux.sh  # Magisk service.d 钩子
+│   └── shims/             # tkinter / PIL 空壳（headless 运行时需要 import）
+├── TERMUX.md              # 更深一层的部署、验收和踩坑记录
+└── ……上游原有文件（core、lang、licenses 等）
+```
 
-- Download and unzip [the latest release](https://github.com/DevilXD/TwitchDropsMiner/releases) - it's recommended to keep it in the folder it comes in.
-- Run it and login/connect the miner to your Twitch account by using the in-app login form.
-- After a successful login, the app should fetch a list of all available campaigns and games you can mine drops for - you can then select and add games of choice to the Priority List available on the Settings tab, and then press on the `Reload` button to start processing. It will fetch a list of all applicable streams it can watch, and start mining right away. You can also manually switch to a different channel as needed.
-- If you wish to keep the miner occupied with mining anything it can, beyond what you've selected via the Priority List, you can use the Priority Mode setting to specify the mining order for the rest of the games.
-- Make sure to link your Twitch account to game accounts on the [campaigns page](https://www.twitch.tv/drops/campaigns), to enable more games to be mined.
+运行链路：
 
-### Pictures:
+```text
+PC (adb) --termux/push.sh--> ~/twitchdrops
+                               ├─ run.py
+                               │   ├─ asyncio: Twitch 核心（登录/挖矿/领取）
+                               │   └─ Flask 线程 :8081
+                               ├─ webgui.py -> 冒充 gui 模块
+                               ├─ catalog.py -> 公开目录发现活动
+                               └─ history.py -> gameEventDrops 历史
+```
 
-![Main](https://user-images.githubusercontent.com/4180725/164298155-c0880ad7-6423-4419-8d73-f3c053730a1b.png)
-![Inventory](https://user-images.githubusercontent.com/4180725/164298315-81cae0d2-24a4-4822-a056-154fd763c284.png)
-![Settings](https://user-images.githubusercontent.com/4180725/164298391-b13ad40d-3881-436c-8d4c-34e2bbe33a78.png)
+---
 
-### Notes:
+## 环境要求
 
-> [!WARNING]  
-> Due to how Twitch handles the drop progression on their side, watching a stream in the browser (or by any other means) on the same account that is actively being used by the miner, will usually cause the miner to misbehave, reporting false progress and getting stuck mining the current drop.  
-> 
-> Using the same account to watch other streams during mining is thus discouraged, in order to avoid any problems arising from it.
+- 手机已安装 Termux（包名 `com.termux`），并开启 USB 调试。
+- PC 上有 `adb`、`bash`；Windows 下用 Git Bash 即可。
+- Termux 里 Python 3.10+（实测 3.14.6）。安装脚本会自动 `pkg install` 编译链和 `ca-certificates`。
+- 可选：Magisk/root，用于安装 `/data/adb/service.d` 开机自启钩子。
+- 一个 Twitch 账号。设备码登录需要手机能访问 Twitch。
 
-> [!CAUTION]  
-> Persistent cookies will be stored in the `cookies.jar` file, from which the authorization (login) information will be restored on each subsequent run. Make sure to keep your cookies file safe, as the authorization information it stores can give another person access to your Twitch account, even without them knowing your password!
+默认按 Termux uid `10250`、包名 `com.termux` 编写。不同设备请在脚本里调整 `su` 的 uid，或设置 `TDM_UID`（`push.sh` 使用）。
 
-> [!IMPORTANT]  
-> Successfully logging into your Twitch account in the application may cause Twitch to send you a "New Login" notification email. This is normal - you can verify that it comes from your own IP address. The detected browser during the login will be "Chrome", as that's what the miner currently presents itself to the Twitch server.
+---
 
-> [!NOTE]  
-> The time remaining timer always countdowns a single minute and then stops - it is then restarted only after the application redetermines the remaining time. This "redetermination" can happen at any time Twitch decides to report on the drop's progress, but not later than 20 seconds after the timer reaches zero. The seconds timer is only an approximation and does not represent nor affect actual mining speed. The time variations are due to Twitch sometimes not reporting drop progress at all, or reporting progress for the wrong drop - these cases have all been accounted for in the application though.
+## 快速开始
 
-> [!NOTE]  
-> The source code requires Python 3.10 or higher to run.
+```bash
+git clone https://github.com/bplhkx/TwitchDropsMiner.git
+cd TwitchDropsMiner/termux
+```
 
-### Notes about the Windows build:
+1. 连接手机，确认设备：
 
-- To achieve a portable-executable format, the application is packaged with PyInstaller into an `EXE`. Some antivirus engines (including Windows Defender) might report the packaged executable as a trojan, because PyInstaller has been used by others to package malicious Python code in the past. These reports can be safely ignored. If you absolutely do not trust the executable, you'll have to install Python yourself and run everything from source.
-- The executable uses the `%TEMP%` directory for temporary runtime storage of files, that don't need to be exposed to the user (like compiled code and translation files). For persistent storage, the directory the executable resides in is used instead.
-- The autostart feature is implemented as a registry entry to the current user's (`HKCU`) autostart key. It is only altered when toggling the respective option. If you relocate the app to a different directory, the autostart feature will stop working, until you toggle the option off and back on again
+```bash
+adb devices
+```
 
-### Notes about the Linux build:
+2. 首次安装（解包 + venv + pip；Termux 上 pip 会现场编译 aiohttp，耗时几分钟）：
 
-- The Linux app is built and distributed using two distinct portable-executable formats: [AppImage](https://appimage.org/) and [PyInstaller](https://pyinstaller.org/).
-- There are no major differences between the two formats, but if you're looking for a recommendation, use the AppImage.
-- The Linux app should work out of the box on any modern distribution, as long as it has `glibc>=2.35`, plus a working display server.
-- Every feature of the app is expected to work on Linux just as well as it does on Windows. If you find something that's broken, please [open a new issue](https://github.com/DevilXD/TwitchDropsMiner/issues/new).
-- The size of the Linux app is significantly larger than the Windows app due to the inclusion of the `gtk3` library (and its dependencies), which is required for proper system tray/notifications support.
-- As an alternative to the native Linux app, you can run the Windows app via [Wine](https://www.winehq.org/) instead. It works really well!
+```bash
+bash push.sh            # 自动选第一台 adb 设备；多设备用 TDM_SERIAL=<serial> bash push.sh
+bash push.sh follow     # 看安装日志
+```
 
-### Notes about the macOS build:
+3. 启动：
 
-- The macOS version is packaged using PyInstaller into a standalone `.app` bundle, distributed as a ZIP archive.
-- Since this application is not signed with a paid Apple Developer Certificate, **macOS Gatekeeper will block it** on the first run (saying it "The application is damaged and can't be opened").
-  - **To fix this**: Either open the Terminal in the folder the app is in (or navigating with `cd path/to/folder`) and enter `xattr -cr Twitch Drops Miner (by DevilXD).app` or just type `xattr -cr ` (make sure to put a space at the end), drag and drop the `Twitch Drops Miner (by DevilXD).app` file into the terminal window (this will auto-fill the path) and enter
-- Persistent files (like `cookies.jar`, `settings.json`, `lock.file` and the `cache` folder) are stored inside the application bundle in `Twitch Drops Miner (by DevilXD).app/Contents/MacOS` (to access them Right-click the application and select `Show Package Contents`)
+```bash
+bash push.sh start
+bash push.sh status
+```
 
-### Advanced Usage:
+4. 打开面板：
 
-If you'd be interested in running the latest master from source or building your own executable, see the wiki page explaining how to do so: https://github.com/DevilXD/TwitchDropsMiner/wiki/Setting-up-the-environment,-building-and-running
+```text
+http://<手机局域网IP>:8081
+```
 
-### Support
+首次进入 `/setup` 设置**面板密码**（与 Twitch 密码无关），然后在「主面板 → 登录Twitch账户」按页面上的设备码到 <https://www.twitch.tv/activate> 完成授权。授权成功后核心会自动轮询令牌并开始载入库存。
 
-If you'd encounter any issues with the miner:
+5. 可选：开机自启（需要 root）：
 
-- Please see the [troubleshooting page](https://github.com/DevilXD/TwitchDropsMiner/wiki/Troubleshooting) for some common issues and their explanation.  
-- Please [search the issues page](https://github.com/DevilXD/TwitchDropsMiner/issues?q=sort%3Aupdated-desc%20is%3Aissue) to see if your issue hasn't been reported yet.  
-- If it's not been reported yet, feel free to open a new issue, describing your problem.
+```bash
+bash push.sh boot
+bash push.sh verifyboot   # 冷停 -> 跑钩子 -> 断言端口/环境/单实例
+```
 
-If you like the application and found it useful, please consider donating a small amount of money to support me. Thank you!
+### 常用控制
 
-<div align="center">
+```bash
+bash push.sh scripts      # 只更新代码/脚本，不动 venv
+bash push.sh stop
+bash push.sh restart
+bash push.sh status
+bash push.sh follow
+```
 
-[![Buy me a coffee](https://i.imgur.com/cL95gzE.png)](
-    https://www.buymeacoffee.com/DevilXD
-)
-[![Support me on Patreon](https://i.imgur.com/Mdkb9jq.png)](
-    https://www.patreon.com/bePatron?u=26937862
-)
+---
 
-</div>
+## 面板页面
 
-### Project goals:
+| 页签 | 内容 |
+| --- | --- |
+| 主面板 | 置顶的掉宝活动进度（游戏封面、奖励图、本次已领取）、核心状态、库存载入方格、Websocket 8 槽位、Twitch 登录、运行日志、活动频道表（可手动切换）、已领取通知 |
+| 掉宝库存 | 5 个筛选（未关联/即将上线/已结束/不在优先列表/已领取）、活动卡、奖励图和进度、ACL 频道、领取按钮 |
+| 历史 | Twitch「已领取」流水，按优先列表分组；物品图/名称/领取时间/次数；支持只看优先列表；活动过期后仍保留 |
+| 设置 | 语言、开机自启、托盘通知、夜间模式、未关联活动、挖掘模式、代理、连接质量、优先/排除列表、刷新库存 |
+| 帮助 | 上游 About/链接/工作原理/入门说明、退出登录（真正 revoke token） |
 
-Twitch Drops Miner (TDM for short) has been designed with a couple of simple goals in mind. These are, specifically:
+### 历史掉宝与手动归属
 
-- Twitch Drops oriented - it's in the name. That's what I made it for.
-- Easy to use for an average person. Includes a nice looking GUI and is packaged as a ready-to-go executable, without requiring an existing Python installation to work.
-- Intended as a helper tool that starts together with your PC, runs in the background through out the day, and then closes together with your PC shutting down at the end of the day. If it can run continuously for 24 hours at minimum, and not run into any errors, I'd call that good enough already.
-- Requiring a minimum amount of attention during operation - check it once or twice through out the day to see if everything's fine with it.
-- Underlying service friendly - the amount of interactions done with the Twitch site is kept to the minimum required for reliable operation, at a level achievable by a diligent site user.
+历史数据来自 Twitch `Inventory.gameEventDrops`，不是当前活动里的 `isClaimed` 库存项。能反查到活动时自动归组；活动过期、Twitch 流水 `game=null` 时，可在设备侧的手动归属表里指定游戏：
 
-TDM is not intended for/as:
+```text
+/data/data/com.termux/files/home/twitchdrops/history_game_map.json
+```
 
-- Mining channel points - again, it's about the drops: only.
-- Mining anything else besides Twitch drops - no, I won't be adding support for a random 3rd party site that also happens to rely on watching Twitch streams.
-- Unattended operation: worst case scenario, it'll stop working and you'll hopefully notice that at some point. Hopefully.
-- 100% uptime application, due to the underlying nature of it, expect fatal errors to happen every so often.
-- Being hosted on a remote server as a 24/7 miner.
-- Being used with more than one managed account.
-- Mining campaigns the managed account isn't linked to.
+```json
+{
+  "APEX Pack": "Apex Legends",
+  "Random TF Archon Shard": "Warframe",
+  "某条 benefit id": "某游戏"
+}
+```
 
-This means that features such as:
+键可以是 benefit id，也可以是奖励名；`history.record` 按文件 mtime 热加载，不需要重启。该文件和 `history.json` 都是设备运行时数据，`.gitignore` 已排除。
 
-- It being possible to run it without a GUI, or with only a console attached.
-- Any form of automatic restart when an error happens.
-- Docker or any other form of remote deployment.
-- Using it with more than one managed account.
-- Making it possible to mine campaigns that the managed account isn't linked to.
-- Anything that increases the site processing load caused by the application.
-- Any form of additional notifications system (email, webhook, etc.), beyond what's already implemented.
+---
 
-..., are most likely not going to be a feature, ever. You're welcome to search through the existing issues to comment on your point of view on the relevant matters, where applicable. Otherwise, most of the new issues that go against these goals will be closed and the user will be pointed to this paragraph.
+## 配置与运行时文件
 
-For more context about these goals, please check out these issues: [#161](https://github.com/DevilXD/TwitchDropsMiner/issues/161), [#105](https://github.com/DevilXD/TwitchDropsMiner/issues/105), [#84](https://github.com/DevilXD/TwitchDropsMiner/issues/84)
+| 文件 | 作用 |
+| --- | --- |
+| `settings.json` | 核心/面板设置；面板改设置会即时写入 |
+| `panel.json` | 面板口令（pbkdf2-sha256），首次 `/setup` 生成 |
+| `.env` | `TDM_WEB_PORT` / `TDM_WEB_HOST` / `PANEL_SECRET`（会话签名密钥） |
+| `cookies.jar` | Twitch 会话（aiohttp CookieJar JSON），**等同账号凭据** |
+| `history.json` | 已领取掉宝历史（version 2，`source=claimed`） |
+| `history_game_map.json` | 旧奖励的手动游戏归属表 |
+| `catalog.cache.json` | 公开掉宝目录缓存 |
+| `log.txt` | 核心日志 |
+| `logs/server.log` | supervisor / run.py 控制台日志 |
 
-### Credits:
+`.env`、`panel.json`、`cookies.jar`、`history*.json`、`catalog.cache.json`、`settings.json` 都不应提交到仓库；`.gitignore` 与 `push.sh` 都会排除它们。
 
-<!---
-Note: The translations credits are sorted alphabetically, based on their English language name.
-When adding a new entry, please ensure to insert it in the correct place in the second section.
-Non-translations related credits should be added to the first section instead.
+---
 
-Note: When adding a new credits line below, please add two trailing spaces at the end
-of the previous line, if they aren't already there. Doing so ensures proper markdown
-rendering on Github. In short: Each credits line should end with two trailing spaces,
-placed past the period character at the end.
+## 活动发现：为什么需要公开目录
 
-• Last line can have the two trailing spaces omitted.
-• Please ensure your editor won't trim the trailing spaces upon saving the file.
-• Please ensure to leave a single empty new line at the end of the file.
--->
+Twitch 自 **2026-09-18** 对 `ViewerDropsDashboard` / `DropCampaignDetails` 增加了完整性校验：
 
-@guihkx - For the CI script, CI maintenance, and everything related to Linux builds.  
-@kWAYTV - For the implementation of the dark mode theme.  
-@crocchetto - For the macOS port.  
+- WEB 客户端报 `IntegrityCheckFailed`；
+- `SMARTBOX`/`ANDROID_APP` 不报错，静默返回 `dropCampaigns: null` / `dropCampaign: null`；
+- `Inventory` 仍正常，所以只能看到“已经参与/有进度”的活动。
 
-@Bamboozul - For the entirety of the Arabic (العربية) translation.  
-@Suz1e - For the entirety of the Chinese (简体中文) translation and revisions.  
-@wwj010, @zhangminghao1989, @Self4215 - For the Chinese (简体中文) translation corrections and revisions.  
-@Ricky103403 - For the entirety of the Traditional Chinese (繁體中文) translation.  
-@LusTerCsI - For the Traditional Chinese (繁體中文) translation corrections and revisions.  
-@nwvh - For the entirety of the Czech (Čeština) translation.  
-@Kjerne - For the entirety of the Danish (Dansk) translation.  
-@lmdpocus - For the entirety of the Dutch (Nederlandse) translation.  
-@Rensoraa - For the Traditional Dutch (Nederlandse) translation corrections and revisions.  
-@roobini-gamer - For the entirety of the French (Français) translation.  
-@Calvineries - For the French (Français) translation revisions.  
-@ThisIsCyreX - For the entirety of the German (Deutsch) translation.  
-@Nagyhoho1234 - For the entirety of the Hungarian (Magyar) translation.  
-@Eriza-Z - For the entirety of the Indonesian translation.  
-@casungo - For the entirety of the Italian (Italiano) translation.  
-@ShimadaNanaki - For the entirety of the Japanese (日本語) translation.  
-@biroman -  For the entirety of the Norwegian (Norsk) translation.  
-@Patriot99 - For the Polish (Polski) translation and revisions (co-authored with @DevilXD).  
-@zarigata - For the entirety of the Portuguese (Português) translation.  
-@Sergo1217 - For the entirety of the Russian (Русский) translation.  
-@kilroy98, @flamesv - For the Russian (Русский) translation corrections and revisions.  
-@Shofuu - For the entirety of the Spanish (Español) translation and revisions.  
-@Forero-0 - For the Spanish (Español) translation revisions.  
-@alikdb - For the entirety of the Turkish (Türkçe) translation.  
-@DogancanYr, @Elderly-Emre, @Hweord - For the Turkish (Türkçe) translation corrections and revisions.  
-@Nollasko - For the entirety of the Ukrainian (Українська) translation and revisions.  
-@kilroy98 - For the Ukrainian (Українська) translation corrections and revisions.  
+为了设备码登录，本分支必须使用 SMARTBOX，因此 `catalog.py` 用公开目录 <https://twitch-drops-api.sunkwi.com/v2/drops> 做**公开元数据发现层**：
+
+- 账号库存、进度、Websocket、看播和领取仍全部直连 Twitch；
+- 目录免费档为每 IP 每 5 分钟 1 次，`catalog.py` 有 310 秒最小间隔 + `catalog.cache.json` 磁盘缓存；限流时退回缓存；
+- 首次就 429 且无缓存时，5 分钟后会自动再触发一次库存刷新；
+- 目录无法知道账号关联状态，目录-only 活动按“已关联”展示；如果实际没绑定游戏账号，挂了不会给奖励，用优先/排除列表控制，或先点活动卡上的关联链接确认；
+- 目录可能同时有上百个活动。默认 `ENDING_SOONEST` 会不断追“马上结束”的活动，想稳定刷某个游戏建议改成“仅观看优先列表中的游戏”并维护优先列表。
+
+相关上游记录：issue #1162、PR #1174 / #1179 / #1180。
+
+---
+
+## 与上游同步
+
+上游 `.py` 没有改动，但以下位置是运行时补丁/新增，合并上游时重点核对：
+
+- `run.py`：`sys.modules['gui'] = webgui`、`ClientType.SMARTBOX`、`_AuthState._browser_login = _oauth_login`、`catalog.install`、`history.install_inventory`；
+- `webgui.py`：对齐 `twitch.py` / `channel.py` / `inventory.py` 里的 `self.gui.*` 调用点；
+- `catalog.py`：依赖 `Twitch._fetch_available_campaigns` / `fetch_campaigns` / `gql_request` 的形状；
+- `history.py`：依赖 Inventory 的 `gameEventDrops` 字段和 `gql_request`；
+- `server/api.py`：依赖上游 `State`、`PriorityMode` 和设置字段。
+
+推荐 remote：
+
+```bash
+git remote add upstream https://github.com/Valentin-Metz/TwitchDropsMiner.git
+git fetch upstream
+git merge upstream/master
+```
+
+本 fork 不使用上游的 CI / Docker / 自动 rebase 工作流：它们会构建桌面 GUI、发布 Docker 镜像或自动 rebase 上游，和 Termux 面板分支不匹配。需要桌面构建/Docker 请使用上游仓库。
+
+---
+
+## 已知限制
+
+- 面板是 Flask 开发服务器（多线程），**只适合局域网自用**，不要直接暴露公网；需要外网访问请自行加反向代理和 TLS。
+- 链接公开目录只能提供公开活动元数据，且免费档限流；目录不可用时依赖缓存。
+- 旧奖励的 `game` 在 Twitch 流水里是 `null`，活动过期后无法可靠自动归组；用 `history_game_map.json` 手动归属，否则进「未归类」。
+- 面板只能记录 Twitch 侧的“已领取”，无法知道奖励是否已经到账游戏内。
+- Android 没有系统托盘；`autostart_tray` 不生效，托盘通知映射为浏览器通知。
+- 本项目是个人 fork，不提供任何账号安全/封号风险担保；请遵守 Twitch 服务条款。
+
+---
+
+## 致谢与许可
+
+- 核心与桌面 GUI：[DevilXD/TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner)（MIT）
+- Docker/headless fork 基线：[Valentin-Metz/TwitchDropsMiner](https://github.com/Valentin-Metz/TwitchDropsMiner)
+- 公开掉宝目录：[Drops API](https://drops.sunkwi.com/docs)
+- Termux 部署与踩坑细节见 [TERMUX.md](TERMUX.md)
+
+代码沿用仓库的 MIT License；上游版权归 DevilXD 所有。

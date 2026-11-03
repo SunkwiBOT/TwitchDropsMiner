@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="{{ 'zh-CN' if LANG() == 'zh' else 'en' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0e0e10">
+<title>{{ ui('title') }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css', v=ASSET_V) }}">
+</head>
+<body class="panel{{ '' if dark_mode() else ' light' }}">
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<header class="topbar">
+  <span class="dot" id="conn-dot" role="img" aria-label="{{ ui('conn_connecting') }}"></span>
+  <span class="title">{{ ui('title') }}</span>
+  <span class="conn" id="conn-text">{{ ui('conn_connecting') }}</span>
+  <span class="user" id="twitch-user">{{ ui('user_unknown') }}</span>
+  <form method="post" action="{{ url_for('panel_logout') }}">
+    <button class="btn quiet icon" type="submit">{{ ui('panel_logout') }}</button>
+  </form>
+</header>
+
+<!-- 页签名与上游 gui/tabs/* 一致 -->
+<nav class="tabs" role="tablist" aria-label="{{ ui('title') }}">
+  <button class="tab" type="button" role="tab" id="tabbtn-main" data-tab="main"
+          aria-controls="tab-main" aria-selected="true">{{ t('gui', 'tabs', 'main') }}<span class="n" id="tabn-main"></span></button>
+  <button class="tab" type="button" role="tab" id="tabbtn-inventory" data-tab="inventory"
+          aria-controls="tab-inventory" aria-selected="false">{{ t('gui', 'tabs', 'inventory') }}<span class="n" id="tabn-inventory"></span></button>
+  <button class="tab" type="button" role="tab" id="tabbtn-history" data-tab="history"
+          aria-controls="tab-history" aria-selected="false">{{ ui('history_tab') }}<span class="n" id="tabn-history"></span></button>
+  <button class="tab" type="button" role="tab" id="tabbtn-settings" data-tab="settings"
+          aria-controls="tab-settings" aria-selected="false">{{ t('gui', 'tabs', 'settings') }}<span class="n" id="tabn-settings"></span></button>
+  <button class="tab" type="button" role="tab" id="tabbtn-help" data-tab="help"
+          aria-controls="tab-help" aria-selected="false">{{ t('gui', 'tabs', 'help') }}</button>
+</nav>
+
+<main>
+
+  <!-- ============================================================ 主面板 -->
+  <section id="tab-main" role="tabpanel" aria-labelledby="tabbtn-main" tabindex="-1">
+
+    <div class="card accent">
+      <h2>{{ t('gui', 'progress', 'name') }}</h2>
+      <div id="progress-body"><p class="muted">{{ ui('progress_empty') }}</p></div>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'status', 'name') }}</h2>
+      <div class="status-msg" id="ov-status">…</div>
+      <div class="cap" id="ov-meta"></div>
+    </div>
+
+    <div class="card" id="load-card" hidden>
+      <h2>{{ ui('load_title') }}</h2>
+      <div class="cells" id="load-cells"></div>
+      <div class="cap" id="load-cap"></div>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'websocket', 'name') }}</h2>
+      <div id="ws-body"></div>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'login', 'name') }}</h2>
+      <div id="login-body"><p class="muted">…</p></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>{{ t('gui', 'output') }}</h2>
+        <span class="cap" id="log-count">0</span>
+      </div>
+      <div class="logbox" id="log-body" role="log" aria-live="off"></div>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'channels', 'name') }}</h2>
+      <div class="cap" id="ch-summary"></div>
+      <div id="channels"><p class="muted">…</p></div>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'tray', 'notification_title') }}</h2>
+      <div id="ov-notifs"><p class="muted">{{ ui('notif_empty') }}</p></div>
+    </div>
+
+  </section>
+
+  <!-- ========================================================== 掉宝库存 -->
+  <section id="tab-inventory" role="tabpanel" aria-labelledby="tabbtn-inventory" tabindex="-1" hidden>
+    <div class="card">
+      <h2>{{ t('gui', 'inventory', 'filter', 'name') }}</h2>
+      <p class="hint">{{ t('gui', 'inventory', 'filter', 'show') }} {{ ui('inv_filters_hint') }}</p>
+      <div class="filters" id="filters">
+        <label class="check"><input type="checkbox" id="f-not_linked"><span>{{ t('gui', 'inventory', 'filter', 'not_linked') }}</span></label>
+        <label class="check"><input type="checkbox" id="f-upcoming"><span>{{ t('gui', 'inventory', 'filter', 'upcoming') }}</span></label>
+        <label class="check"><input type="checkbox" id="f-expired"><span>{{ t('gui', 'inventory', 'filter', 'expired') }}</span></label>
+        <label class="check"><input type="checkbox" id="f-excluded"><span>{{ t('gui', 'inventory', 'filter', 'excluded') }}</span></label>
+        <label class="check"><input type="checkbox" id="f-finished"><span>{{ t('gui', 'inventory', 'filter', 'finished') }}</span></label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" type="button" id="inv-refresh">{{ t('gui', 'inventory', 'filter', 'refresh') }}</button>
+      </div>
+      <p class="hint">{{ ui('inv_refresh_hint') }}</p>
+      <div class="cap" id="inv-summary"></div>
+    </div>
+    <div id="campaigns"><p class="muted">…</p></div>
+  </section>
+
+  <!-- ========================================================== 历史掉宝 -->
+  <section id="tab-history" role="tabpanel" aria-labelledby="tabbtn-history" tabindex="-1" hidden>
+    <div class="card">
+      <h2>{{ ui('history_title') }}</h2>
+      <p class="hint">{{ ui('history_hint') }}</p>
+      <label class="check"><input type="checkbox" id="hist-only-priority">
+        <span>{{ ui('history_only_priority') }}</span></label>
+      <div class="modal-actions">
+        <button class="btn" type="button" id="hist-refresh">{{ t('gui', 'inventory', 'filter', 'refresh') }}</button>
+      </div>
+      <div class="cap" id="hist-summary"></div>
+    </div>
+    <div id="history-groups"></div>
+  </section>
+
+  <!-- ============================================================== 设置 -->
+  <section id="tab-settings" role="tabpanel" aria-labelledby="tabbtn-settings" tabindex="-1" hidden>
+
+    <div class="card">
+      <h2>{{ t('gui', 'settings', 'general', 'name') }}</h2>
+
+      <label for="set-language">Language 🌐 {{ ui('set_lang_hint') }}</label>
+      <select id="set-language"></select>
+
+      <label class="check"><input type="checkbox" id="set-autostart">
+        <span>{{ t('gui', 'settings', 'general', 'autostart') }}</span></label>
+      <div class="hint" id="autostart-hint" hidden>{{ ui('set_autostart_na') }}</div>
+
+      <label class="check disabled"><input type="checkbox" id="set-autostart-tray" disabled>
+        <span>{{ t('gui', 'settings', 'general', 'tray') }}</span></label>
+      <div class="hint">{{ ui('set_tray_na') }}</div>
+
+      <label class="check"><input type="checkbox" id="set-tray-notif">
+        <span>{{ t('gui', 'settings', 'general', 'tray_notifications') }}</span></label>
+      <label class="check"><input type="checkbox" id="set-dark-mode">
+        <span>{{ t('gui', 'settings', 'general', 'dark_mode') }}</span></label>
+      <label class="check"><input type="checkbox" id="set-unlinked">
+        <span>{{ t('gui', 'settings', 'general', 'unlinked_campaigns') }}</span></label>
+
+      <label for="set-mode">{{ t('gui', 'settings', 'general', 'priority_mode') }}</label>
+      <select id="set-mode">
+        <option value="PRIORITY_ONLY">{{ t('gui', 'settings', 'priority_modes', 'priority_only') }}</option>
+        <option value="ENDING_SOONEST">{{ t('gui', 'settings', 'priority_modes', 'ending_soonest') }}</option>
+        <option value="LOW_AVBL_FIRST">{{ t('gui', 'settings', 'priority_modes', 'low_availability') }}</option>
+      </select>
+      <p class="hint" id="mode-hint"></p>
+
+      <label for="set-proxy">{{ t('gui', 'settings', 'general', 'proxy') }}</label>
+      <input id="set-proxy" type="text" inputmode="url" autocomplete="off" placeholder="{{ ui('set_proxy_ph') }}">
+      <p class="hint">{{ ui('set_proxy_hint') }}</p>
+
+      <label for="set-quality">{{ ui('set_quality') }}</label>
+      <select id="set-quality">
+        <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+        <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+      </select>
+      <p class="hint">{{ ui('set_quality_hint') }}</p>
+      <p class="hint">{{ ui('set_immediate_hint') }}</p>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'settings', 'advanced', 'name') }}</h2>
+      <p class="warn-title">{{ t('gui', 'settings', 'advanced', 'warning') }}</p>
+      <p class="hint" style="white-space: pre-line">{{ t('gui', 'settings', 'advanced', 'warning_text') }}</p>
+      <label class="check"><input type="checkbox" id="set-badges">
+        <span>{{ t('gui', 'settings', 'advanced', 'enable_badges_emotes') }}</span></label>
+      <label class="check"><input type="checkbox" id="set-availcheck">
+        <span>{{ t('gui', 'settings', 'advanced', 'available_drops_check') }}</span></label>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'settings', 'priority') }}</h2>
+      <label for="prio-input">{{ t('gui', 'settings', 'game_name') }}</label>
+      <input id="prio-input" type="text" autocomplete="off" placeholder="{{ ui('add_ph') }}">
+      <div class="picker-bar">
+        <button class="btn quiet" type="button" id="prio-toggle" aria-expanded="false"
+                aria-controls="prio-suggest">{{ ui('cand_open') }} <span id="prio-count">0</span></button>
+        <button class="btn primary" type="button" id="prio-add">＋ {{ ui('add') }}</button>
+      </div>
+      <div class="suggest" id="prio-suggest" hidden></div>
+      <p class="hint">{{ ui('cand_hint') }}</p>
+      <ul id="prio-list" class="list"></ul>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'settings', 'exclude') }}</h2>
+      <label for="excl-input">{{ t('gui', 'settings', 'game_name') }}</label>
+      <input id="excl-input" type="text" autocomplete="off" placeholder="{{ ui('add_ph') }}">
+      <div class="picker-bar">
+        <button class="btn quiet" type="button" id="excl-toggle" aria-expanded="false"
+                aria-controls="excl-suggest">{{ ui('cand_open') }} <span id="excl-count">0</span></button>
+        <button class="btn primary" type="button" id="excl-add">＋ {{ ui('add') }}</button>
+      </div>
+      <div class="suggest" id="excl-suggest" hidden></div>
+      <ul id="excl-list" class="list"></ul>
+    </div>
+
+    <div class="card">
+      <p class="hint">{{ t('gui', 'settings', 'reload_text') }}</p>
+      <button class="btn primary" type="button" id="set-reload">{{ t('gui', 'settings', 'reload') }}</button>
+    </div>
+
+  </section>
+
+  <!-- ============================================================== 帮助 -->
+  <section id="tab-help" role="tabpanel" aria-labelledby="tabbtn-help" tabindex="-1" hidden>
+    <div class="card">
+      <h2>About</h2>
+      <div class="row"><span class="k">Application created by:</span><span class="v">
+        <a class="link" href="https://github.com/DevilXD" target="_blank" rel="noopener">DevilXD</a></span></div>
+      <div class="row"><span class="k">Repository:</span><span class="v">
+        <a class="link" href="https://github.com/DevilXD/TwitchDropsMiner" target="_blank" rel="noopener">DevilXD/TwitchDropsMiner</a></span></div>
+      <div class="row"><span class="k">{{ ui('help_fork') }}:</span><span class="v">
+        <a class="link" href="https://github.com/Valentin-Metz/TwitchDropsMiner" target="_blank" rel="noopener">Valentin-Metz/TwitchDropsMiner</a></span></div>
+      <div class="row"><span class="k">{{ ui('help_version') }}:</span><span class="v" id="about-version">—</span></div>
+      <div class="row"><span class="k">Donate:</span><span class="v">
+        <a class="link" href="https://www.buymeacoffee.com/DevilXD" target="_blank" rel="noopener">If you like the application and found it useful, please consider donating a small amount of money to support me. Thank you!</a></span></div>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'help', 'links', 'name') }}</h2>
+      <p><a class="link" href="https://www.twitch.tv/drops/inventory" target="_blank" rel="noopener">{{ t('gui', 'help', 'links', 'inventory') }}</a></p>
+      <p><a class="link" href="https://www.twitch.tv/drops/campaigns" target="_blank" rel="noopener">{{ t('gui', 'help', 'links', 'campaigns') }}</a></p>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'help', 'how_it_works') }}</h2>
+      <p class="hint">{{ t('gui', 'help', 'how_it_works_text') }}</p>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'help', 'getting_started') }}</h2>
+      <p class="hint" style="white-space: pre-line">{{ t('gui', 'help', 'getting_started_text') }}</p>
+    </div>
+
+    <div class="card">
+      <h2>{{ t('gui', 'help', 'invalidate', 'text') }}</h2>
+      <div class="modal-actions">
+        <button class="btn" type="button" id="twitch-logout">{{ t('gui', 'help', 'invalidate', 'button') }}</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-card">
+    <h3 id="modal-title">{{ ui('confirm_title') }}</h3>
+    <p id="modal-text"></p>
+    <div class="modal-actions">
+      <button class="btn" type="button" id="modal-no">{{ ui('confirm_cancel') }}</button>
+      <button class="btn primary" type="button" id="modal-yes">{{ ui('confirm_ok') }}</button>
+    </div>
+  </div>
+</div>
+
+<script>
+window.TDM_T = {{ _js_i18n() | tojson }};
+</script>
+<script src="{{ url_for('static', filename='app.js', v=ASSET_V) }}"></script>
+</body>
+</html>

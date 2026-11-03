@@ -27,3 +27,13 @@ settings.json
 .DS_Store
 *.app
 healthcheck.timestamp
+
+# Device runtime state (never commit)
+/panel.json
+/.env
+/history.json
+/history.json.new
+/history_game_map.json
+/catalog.cache.json
+/boot.disabled
+/termux/boot.installed

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="{{ 'zh-CN' if LANG() == 'zh' else 'en' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0e0e10">
+<title>{{ ui('title') }} · {{ ui('auth_submit_setup') }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css', v=ASSET_V) }}">
+</head>
+<body class="panel">
+<main class="auth">
+  <div class="auth-card">
+    <h1>{{ ui('title') }}</h1>
+    <p class="lead">{{ ui('auth_setup_lead') }}</p>
+    <form method="post" action="{{ url_for('setup_page') }}">
+      <label for="password">{{ ui('auth_password') }}</label>
+      <input id="password" name="password" type="password" autocomplete="new-password"
+             minlength="8" required autofocus>
+      <label for="password2">{{ ui('auth_password2') }}</label>
+      <input id="password2" name="password2" type="password" autocomplete="new-password"
+             minlength="8" required>
+      <button class="btn primary" type="submit">{{ ui('auth_submit_setup') }}</button>
+    </form>
+    {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
+  </div>
+</main>
+</body>
+</html>
