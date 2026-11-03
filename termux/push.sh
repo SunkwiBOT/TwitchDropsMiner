@@ -63,7 +63,7 @@ tar -C "$REPO" \
     --exclude panel.json --exclude .env --exclude settings.json --exclude cookies.jar \
     --exclude log.txt --exclude lock.file --exclude dump.dat --exclude boot.disabled \
     --exclude catalog.cache.json --exclude history.json --exclude history.json.new \
-    --exclude history_game_map.json --exclude claimed_drops.json \
+    --exclude history_game_map.json --exclude claimed_drops.json --exclude catalog.config.json \
     --exclude 'termux/boot.installed' --exclude 'logs/*' --exclude 'cache/*' \
     -cf - . | tar -C "$STAGE" -xf -
 mkdir -p "$STAGE/shims"

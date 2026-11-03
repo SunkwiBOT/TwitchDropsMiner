@@ -1,4 +1,4 @@
-# TwitchDropsMiner — Termux 网页面板分支
+# Twitch 挖宝鼠 — TwitchDropsMiner Termux 网页面板分支
 
 在 Android / Termux 里**原生**运行 [TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner)，并把原本依赖 tkinter 的桌面界面换成一套可用的中文 Web 面板。不需要 X11 / Xvfb，不需要真 Chrome，也不是 proot/chroot。
 
@@ -16,10 +16,11 @@
 
 - **纯 Termux 进程**：`run.py` 直接在 Termux 的 Python 里跑核心，Flask 面板在另一个线程；没有桌面、Docker 或虚拟显示依赖。
 - **设备码登录**：强制使用 `ClientType.SMARTBOX`，登录走 Twitch 设备码，不依赖 zendriver/Chrome。登录会话保存在 `cookies.jar`。
-- **全功能中文面板**：主面板 / 掉宝库存 / 历史 / 设置 / 帮助五个页签，文案来自上游 `lang/*.json`，支持 20+ 种语言切换。
+- **全功能中文面板**：主面板 / 掉宝库存 / 历史 / 设置 / 帮助五个页签，文案来自上游 `lang/*.json`，支持 20+ 种语言切换；页面总标题为 **Twitch 挖宝鼠**。
+- **可调的活动刷新频率**：设置页可按分钟自定义公开目录/新活动的发现间隔（5–1440 分钟，受公开目录免费档限制）。
 - **主面板掉宝进度置顶**：游戏封面、当前掉宝奖励图、活动/掉宝进度方格、秒级倒计时，以及**本次已领取的物品**。
 - **掉宝库存**：上游同款 5 个筛选、活动卡、ACL 频道、奖励图与进度，筛选状态存浏览器 localStorage。
-- **历史掉宝**：记录 Twitch「已领取」流水（`gameEventDrops`），活动过期、重启、Twitch 六个月列表刷新都不丢；按优先列表分组，支持手动游戏归属。
+- **历史掉宝**：记录 Twitch「已领取」流水（`gameEventDrops`），活动过期、重启、Twitch 六个月列表刷新都不丢；按优先列表分组，支持手动游戏归属；同名奖励（如多个 APEX Pack）默认堆叠，点开看每次领取详情。
 - **完整设置面**：语言、开机自启、托盘通知（映射为浏览器通知）、夜间模式、未关联活动、挖掘模式、代理、连接质量、优先/排除列表、刷新库存。
 - **Termux 运维脚本**：一条命令完成打包/推送/安装/启停/状态/开机自启/冷启验证。
 - **开机自启**：Magisk `/data/adb/service.d` 钩子，面板里可开关；`push.sh verifyboot` 做冷停恢复验收。
@@ -140,12 +141,12 @@ bash push.sh follow
 | 主面板 | 置顶的掉宝活动进度（游戏封面、奖励图、本次已领取）、核心状态、库存载入方格、Websocket 8 槽位、Twitch 登录、运行日志、活动频道表（可手动切换）、已领取通知 |
 | 掉宝库存 | 5 个筛选（未关联/即将上线/已结束/不在优先列表/已领取）、活动卡、奖励图和进度、ACL 频道、领取按钮 |
 | 历史 | Twitch「已领取」流水，按优先列表分组；物品图/名称/领取时间/次数；支持只看优先列表；活动过期后仍保留 |
-| 设置 | 语言、开机自启、托盘通知、夜间模式、未关联活动、挖掘模式、代理、连接质量、优先/排除列表、刷新库存 |
+| 设置 | 语言、掉宝活动刷新频率、开机自启、托盘通知、夜间模式、未关联活动、挖掘模式、代理、连接质量、优先/排除列表、刷新库存 |
 | 帮助 | 上游 About/链接/工作原理/入门说明、退出登录（真正 revoke token） |
 
 ### 历史掉宝与手动归属
 
-历史数据来自 Twitch `Inventory.gameEventDrops`，不是当前活动里的 `isClaimed` 库存项。能反查到活动时自动归组；活动过期、Twitch 流水 `game=null` 时，可在设备侧的手动归属表里指定游戏：
+历史数据来自 Twitch `Inventory.gameEventDrops`，不是当前活动里的 `isClaimed` 库存项。能反查到活动时自动归组；活动过期、Twitch 流水 `game=null` 时，可在设备侧的手动归属表里指定游戏。同一游戏下同名的多条奖励会折叠成 `名称 ×N` 的卡片，点击展开每次领取的时间/活动/图片。
 
 ```text
 /data/data/com.termux/files/home/twitchdrops/history_game_map.json
@@ -175,6 +176,7 @@ bash push.sh follow
 | `history_game_map.json` | 旧奖励的手动游戏归属表 |
 | `claimed_drops.json` | 成功 claim 过的 drop id；避免 Twitch 反复报告可领取导致重复请求/日志 |
 | `catalog.cache.json` | 公开掉宝目录缓存 |
+| `catalog.config.json` | 用户自定义的活动刷新间隔（秒） |
 | `log.txt` | 核心日志 |
 | `logs/server.log` | supervisor / run.py 控制台日志 |
 

@@ -32,14 +32,56 @@ logger = logging.getLogger("TwitchDrops")
 
 CATALOG_URL = "https://twitch-drops-api.sunkwi.com/v2/drops"
 CACHE_PATH = WORKING_DIR / "catalog.cache.json"
-# 免费档：每 IP 每 5 分钟 1 次；留一点余量
-MIN_INTERVAL = 310.0
+CONFIG_PATH = WORKING_DIR / "catalog.config.json"
+# 免费档：每 IP 每 5 分钟 1 次；留一点余量。用户可在设置页把刷新间隔调大。
+API_MIN_INTERVAL = 310.0
+DEFAULT_INTERVAL = 600.0
+CONFIG_MIN_INTERVAL = 300
+CONFIG_MAX_INTERVAL = 86400
 APPLICABLE_STATUSES = ("ACTIVE", "UPCOMING")
 
 _cache: dict[str, Any] = {"payload": None, "fetched_at": 0.0, "campaigns": {}}
 _last_attempt = 0.0
 _lock: asyncio.Lock | None = None
 _retry_clients: set[int] = set()
+_config_interval: float | None = None
+_config_mtime = 0.0
+
+
+def configured_interval() -> float:
+    """面板设置的刷新间隔（秒）；每 5 分钟最低，默认 10 分钟。"""
+    global _config_interval, _config_mtime
+    try:
+        mtime = CONFIG_PATH.stat().st_mtime
+    except OSError:
+        _config_interval = None
+        _config_mtime = 0.0
+        return DEFAULT_INTERVAL
+    if mtime != _config_mtime:
+        try:
+            raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            value = int(raw.get("interval_seconds", DEFAULT_INTERVAL))
+        except Exception as exc:
+            logger.warning("Campaign catalog: invalid config: %s", exc)
+            value = int(DEFAULT_INTERVAL)
+        value = min(max(value, CONFIG_MIN_INTERVAL), CONFIG_MAX_INTERVAL)
+        _config_interval = float(value)
+        _config_mtime = mtime
+    return _config_interval or DEFAULT_INTERVAL
+
+
+def set_interval(seconds: int) -> int:
+    """写入刷新间隔并返回钳制后的秒数；文件更新后下一次 get_campaigns 生效。"""
+    value = min(max(int(seconds), CONFIG_MIN_INTERVAL), CONFIG_MAX_INTERVAL)
+    tmp = CONFIG_PATH.with_name(CONFIG_PATH.name + ".new")
+    tmp.write_text(json.dumps({"interval_seconds": value}), encoding="utf-8")
+    tmp.replace(CONFIG_PATH)
+    global _config_mtime
+    try:
+        _config_mtime = CONFIG_PATH.stat().st_mtime
+    except OSError:
+        _config_mtime = 0.0
+    return value
 
 
 def _get_lock() -> asyncio.Lock:
@@ -221,10 +263,11 @@ async def get_campaigns(settings: Any) -> dict[str, dict]:
     _load_disk_cache()
     async with _get_lock():
         now = time.time()
-        fresh = _cache["payload"] is not None and (now - _cache["fetched_at"]) < MIN_INTERVAL
+        interval = configured_interval()
+        fresh = _cache["payload"] is not None and (now - _cache["fetched_at"]) < interval
         if fresh:
             return _prune(_cache["campaigns"])
-        if now - _last_attempt < MIN_INTERVAL:
+        if now - _last_attempt < API_MIN_INTERVAL:
             # 上一次请求刚失败（或刚成功但还没到 5 分钟），别再去撞限流
             return _prune(_cache["campaigns"])
         _last_attempt = now
@@ -254,7 +297,7 @@ async def _retry_discovery(client: Any) -> None:
         return
     _retry_clients.add(key)
     try:
-        await asyncio.sleep(MIN_INTERVAL)
+        await asyncio.sleep(API_MIN_INTERVAL)
         from constants import State
         client.change_state(State.INVENTORY_FETCH)
         logger.info("Campaign catalog: retried discovery after rate limit")

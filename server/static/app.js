@@ -795,29 +795,95 @@
       }
       card.appendChild(head);
       const grid = el('div', 'hist-grid');
+      const stacks = new Map();
       (group.items || []).forEach((item) => {
-        const box = el('div', 'hist-item');
-        const image = item.image || group.image;
+        const stackName = (item.name || item.drop_name || '—').trim();
+        const key = stackName || item.key || item.benefit_id || String(stacks.size);
+        if (!stacks.has(key)) stacks.set(key, []);
+        stacks.get(key).push(item);
+      });
+      stacks.forEach((items, stackName) => {
+        const first = items[0];
+        const totalCount = items.reduce((sum, item) => sum + Number(item.count || 1), 0);
+        const image = first.image || group.image;
+        if (items.length === 1) {
+          const box = el('div', 'hist-item');
+          if (image) {
+            const img = el('img');
+            img.src = image;
+            img.alt = '';
+            img.loading = 'lazy';
+            img.addEventListener('error', () => img.remove());
+            box.appendChild(img);
+          }
+          const itemCount = Number(first.count || 1);
+          box.appendChild(el('div', 'hname',
+            itemCount > 1 ? `${stackName} ×${itemCount}` : stackName));
+          if (first.campaign_name) {
+            box.appendChild(el('div', 'hmeta',
+              U('history_campaign_meta', {campaign: first.campaign_name})));
+          }
+          const stamp = first.claimed_at || first.first_seen;
+          box.appendChild(el('div', 'hmeta', first.claimed_at
+            ? U('history_claimed_at', {time: fmtDateTime(stamp)})
+            : U('history_recorded_at', {time: fmtDateTime(stamp)})));
+          grid.appendChild(box);
+          return;
+        }
+        // 同名奖励（例如多个 APEX Pack）默认堆叠；点开看每次领取详情
+        const box = el('div', 'hist-item hist-stack');
+        const head = el('button', 'hist-stack-head');
+        head.type = 'button';
+        head.setAttribute('aria-expanded', 'false');
         if (image) {
           const img = el('img');
           img.src = image;
           img.alt = '';
           img.loading = 'lazy';
           img.addEventListener('error', () => img.remove());
-          box.appendChild(img);
+          head.appendChild(img);
         }
-        const itemName = item.name || item.drop_name || '—';
-        const itemCount = Number(item.count || 1);
-        box.appendChild(el('div', 'hname',
-          itemCount > 1 ? `${itemName} ×${itemCount}` : itemName));
-        if (item.campaign_name) {
-          box.appendChild(el('div', 'hmeta',
-            U('history_campaign_meta', {campaign: item.campaign_name})));
-        }
-        const stamp = item.claimed_at || item.first_seen;
-        box.appendChild(el('div', 'hmeta', item.claimed_at
-          ? U('history_claimed_at', {time: fmtDateTime(stamp)})
-          : U('history_recorded_at', {time: fmtDateTime(stamp)})));
+        head.appendChild(el('span', 'hname', stackName));
+        head.appendChild(el('span', 'hist-count', `×${totalCount}`));
+        head.appendChild(el('span', 'hist-chevron'));
+        head.title = U('history_toggle');
+        box.appendChild(head);
+        const details = el('div', 'hist-details');
+        details.hidden = true;
+        items.forEach((item) => {
+          const row = el('div', 'hist-detail');
+          const detailImage = item.image || image;
+          if (detailImage) {
+            const img = el('img');
+            img.src = detailImage;
+            img.alt = '';
+            img.loading = 'lazy';
+            img.addEventListener('error', () => img.remove());
+            row.appendChild(img);
+          }
+          const info = el('div', 'hist-detail-info');
+          info.appendChild(el('div', 'dname', item.name || item.drop_name || '—'));
+          if (item.campaign_name) {
+            info.appendChild(el('div', null,
+              U('history_campaign_meta', {campaign: item.campaign_name})));
+          }
+          const stamp = item.claimed_at || item.first_seen;
+          info.appendChild(el('div', null, item.claimed_at
+            ? U('history_claimed_at', {time: fmtDateTime(stamp)})
+            : U('history_recorded_at', {time: fmtDateTime(stamp)})));
+          if (Number(item.count || 1) > 1) {
+            info.appendChild(el('div', null, `×${item.count}`));
+          }
+          row.appendChild(info);
+          details.appendChild(row);
+        });
+        box.appendChild(details);
+        head.addEventListener('click', () => {
+          const open = details.hidden;
+          details.hidden = !open;
+          head.setAttribute('aria-expanded', open ? 'true' : 'false');
+          box.classList.toggle('open', open);
+        });
         grid.appendChild(box);
       });
       card.appendChild(grid);
@@ -860,6 +926,9 @@
       list.forEach((name) => lang.appendChild(new Option(name, name)));
     }
     if (data.language) lang.value = data.language;
+
+    const discovery = $('set-discovery');
+    discovery.value = String(Math.round(Number(data.catalog_interval || 600) / 60));
 
     if (filters.not_linked === null) {
       filters.not_linked = data.priority_mode === 'PRIORITY_ONLY' ? 1 : 0;
@@ -1279,6 +1348,15 @@
     });
     $('set-mode').addEventListener('change', (ev) => {
       patchSettings({priority_mode: ev.target.value});
+    });
+    $('set-discovery').addEventListener('change', (ev) => {
+      const minutes = Number(ev.target.value);
+      if (!Number.isFinite(minutes) || minutes < 5 || minutes > 1440) {
+        toast(U('catalog_interval_invalid'), 'err');
+        refreshSettings();
+        return;
+      }
+      patchSettings({catalog_interval: Math.round(minutes * 60)});
     });
     $('set-quality').addEventListener('change', (ev) => {
       patchSettings({connection_quality: Number(ev.target.value)});

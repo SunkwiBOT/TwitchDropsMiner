@@ -79,6 +79,12 @@ bash push.sh verifyboot # 冷停 → 跑钩子 → 断言端口回来（含 auto
 
 验收（真机 531px）：页签「历史」显示 6 件，和你截图里的已领取列表一一对应——Warframe #1 组 1 件（Random TF Archon Shard）、Apex Legends #2 组 4 件（`"Respawning"` Holospray、APEX Pack ×2、Charge Rifle Skin）、Minecraft #3 空组、World of Warships 组 1 件（Update 15.9 Mission #3）；没有「未归类」。图片、领取时间、优先徽章和筛选均正常，无横向溢出。
 
+## 活动刷新频率与历史堆叠（2026-11-03）
+
+- 设置页新增「掉宝活动刷新频率（分钟）」，写入设备侧 `$APP/catalog.config.json`：`{"interval_seconds": 600}`，范围 300–86400 秒（UI 5–1440 分钟）。`catalog.configured_interval()` 按文件 mtime 热加载；公开目录 API 的请求下限仍是 310 秒。核心每 5 分钟探测一次，所以实际生效最多再晚 5 分钟。
+- 历史页对同一游戏下同名的多条奖励做堆叠：默认只显示一张 `名称 ×N` 卡片，点击展开每次领取的时间/活动/缩略图；不影响后端 `history.json` 的逐条记录。
+- 面板总标题改为 **Twitch 挖宝鼠**（顶部、浏览器标签、登录/设置页标题）。
+
 ## 重复领取日志修复（2026-11-03 21:52）
 
 **症状**：运行日志反复出现同一批 `Claimed drop: ...`（ARKNIGHTS Sanctuary of Ink 5 条、ARC Raiders Frozen Trail 2 条），每次库存刷新来一轮；旧 log.txt 累计 1600+ 条。

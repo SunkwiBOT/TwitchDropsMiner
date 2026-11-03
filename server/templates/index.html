@@ -133,6 +133,10 @@
       <label for="set-language">Language 🌐 {{ ui('set_lang_hint') }}</label>
       <select id="set-language"></select>
 
+      <label for="set-discovery">{{ ui('catalog_interval') }}</label>
+      <input id="set-discovery" type="number" min="5" max="1440" step="1" inputmode="numeric">
+      <p class="hint">{{ ui('catalog_interval_hint') }}</p>
+
       <label class="check"><input type="checkbox" id="set-autostart">
         <span>{{ t('gui', 'settings', 'general', 'autostart') }}</span></label>
       <div class="hint" id="autostart-hint" hidden>{{ ui('set_autostart_na') }}</div>

@@ -1289,3 +1289,104 @@ main {
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+
+/* 历史页：同名奖励堆叠 */
+
+.hist-stack {
+  padding: 0;
+  overflow: hidden;
+}
+
+.hist-stack-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hist-stack-head img {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  background: var(--surface-2);
+  border-radius: 6px;
+}
+
+.hist-stack-head .hname {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.hist-count {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.hist-chevron {
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.hist-stack.open .hist-chevron {
+  transform: rotate(180deg);
+}
+
+.hist-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.hist-details[hidden] {
+  display: none;
+}
+
+.hist-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.hist-detail img {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  background: var(--surface-2);
+  border-radius: 6px;
+}
+
+.hist-detail-info {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hist-detail-info .dname {
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+}

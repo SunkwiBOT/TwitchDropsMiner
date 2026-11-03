@@ -38,3 +38,4 @@ healthcheck.timestamp
 /boot.disabled
 /termux/boot.installed
 /claimed_drops.json
+/catalog.config.json

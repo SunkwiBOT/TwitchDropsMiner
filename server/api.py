@@ -20,6 +20,7 @@ from flask import (Flask, jsonify, redirect, render_template, request,
                    session, url_for)
 
 from constants import State
+import catalog
 import history
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -46,7 +47,7 @@ app.jinja_env.globals["ASSET_V"] = ASSET_V
 
 PANEL_UI = {
     "zh": {
-        "title": "掉宝矿工面板",
+        "title": "Twitch 挖宝鼠",
         "panel_logout": "退出面板",
         "conn_connecting": "正在连接",
         "conn_connected": "已连接",
@@ -77,13 +78,18 @@ PANEL_UI = {
         "claimed_items": "本次已领取：",
         "history_tab": "历史",
         "history_title": "历史掉宝",
-        "history_hint": "记录 Twitch「已领取」奖励，活动过期后仍保留。优先列表里的游戏排在最前（没有记录的也会列出）；旧活动无法识别游戏的记录放在最后。",
+        "history_hint": "记录 Twitch「已领取」奖励，活动过期后仍保留。优先列表里的游戏排在最前（没有记录的也会列出）；旧活动无法识别游戏的记录放在最后。同名奖励默认堆叠，点开看每次领取详情。",
         "history_only_priority": "只看优先列表游戏",
         "history_summary": "共 {n} 件物品 · {m} 款游戏有记录",
         "history_priority": "优先 #{n}",
         "history_group_meta": "{n} 件 · 最近 {time}",
         "history_group_empty": "暂无领取记录",
+        "history_toggle": "展开/收起",
         "history_unknown_game": "未归类（旧活动）",
+        "catalog_interval": "掉宝活动刷新频率（分钟）",
+        "catalog_interval_hint": "最低 5 分钟（公开目录免费档限制），最高 1440 分钟；改动会在下一轮探测时生效，最多再等 5 分钟。",
+        "catalog_interval_invalid": "请输入 5–1440 之间的分钟数",
+        "minutes": "{n} 分钟",
         "history_claimed_at": "领取于 {time}",
         "history_recorded_at": "记录于 {time}",
         "history_campaign_meta": "活动：{campaign}",
@@ -155,7 +161,7 @@ PANEL_UI = {
         "state_line": "核心状态",
     },
     "en": {
-        "title": "Twitch Drops Miner Panel",
+        "title": "Twitch Drops Miner",
         "panel_logout": "Log out",
         "conn_connecting": "Connecting",
         "conn_connected": "Connected",
@@ -186,13 +192,18 @@ PANEL_UI = {
         "claimed_items": "Claimed this campaign:",
         "history_tab": "History",
         "history_title": "Drop history",
-        "history_hint": "Twitch-claimed rewards, kept after the campaigns expire. Priority-list games come first (even with no claims yet); old claims whose game cannot be identified go last.",
+        "history_hint": "Twitch-claimed rewards, kept after the campaigns expire. Priority-list games come first (even with no claims yet); old claims whose game cannot be identified go last. Same-name rewards are stacked; click to expand each claim.",
         "history_only_priority": "Only priority-list games",
         "history_summary": "{n} items · {m} games with records",
         "history_priority": "Priority #{n}",
         "history_group_meta": "{n} items · latest {time}",
         "history_group_empty": "No claims yet",
+        "history_toggle": "Expand/collapse",
         "history_unknown_game": "Uncategorized (old campaigns)",
+        "catalog_interval": "Campaign discovery interval (minutes)",
+        "catalog_interval_hint": "5–1440 minutes. The free catalog allows at most one request per 5 minutes; changes apply on the next probe (up to 5 minutes later).",
+        "catalog_interval_invalid": "Enter a value between 5 and 1440 minutes",
+        "minutes": "{n} min",
         "history_claimed_at": "Claimed {time}",
         "history_recorded_at": "Recorded {time}",
         "history_campaign_meta": "Campaign: {campaign}",
@@ -954,6 +965,8 @@ def api_settings():
         "autostart": autostart_enabled(),
         "autostart_available": autostart_available(),
         "tray_available": False,
+        "catalog_interval": int(catalog.configured_interval()),
+        "catalog_interval_options": [300, 600, 900, 1800, 3600],
         "available_games": sorted(games),
         "labels": {
             "general": _t("gui", "settings", "general", "name"),
@@ -1021,6 +1034,11 @@ def api_settings_save():
             return jsonify({"error": "未知语言"}), 400
         s.language = lang
         language_changed = True
+    if "catalog_interval" in data:
+        try:
+            catalog.set_interval(int(data["catalog_interval"]))
+        except (TypeError, ValueError):
+            return jsonify({"error": "刷新间隔需为整数秒"}), 400
     if "autostart" in data:
         try:
             set_autostart(bool(data["autostart"]))
