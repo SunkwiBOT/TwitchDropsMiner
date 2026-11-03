@@ -81,7 +81,7 @@ bash push.sh verifyboot # 冷停 → 跑钩子 → 断言端口回来（含 auto
 
 ## About 与中文翻译修正（2026-11-03 22:13）
 
-- About 页改正为：应用作者 DevilXD / 上游仓库 DevilXD/TwitchDropsMiner / 基线 fork Valentin-Metz/TwitchDropsMiner / 本仓库 bplhkx/TwitchDropsMiner / 核心版本 v16.dev / 面板 Termux Web Panel。
+- About 页改正为：应用作者 **bplhkx**（链接到 github.com/bplhkx）/ 上游仓库 DevilXD/TwitchDropsMiner / 基线 fork Valentin-Metz/TwitchDropsMiner / 本仓库 bplhkx/TwitchDropsMiner / 核心版本 v16.dev / 面板 Termux Web Panel；捐赠行已按用户要求删除。
 - 上游 `lang/简体中文.json` 缺少 `gui.settings.general.unlinked_campaigns`，导致设置页显示英文；已补「允许挖掘未关联账户的活动」。该翻译随 `_.set_language` 在启动时加载，改完需重启（本次已重启）。
 
 ## 活动刷新频率与历史堆叠（2026-11-03）
