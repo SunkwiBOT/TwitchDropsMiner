@@ -194,7 +194,7 @@ Twitch 自 **2026-09-18** 对 `ViewerDropsDashboard` / `DropCampaignDetails` 增
 - `SMARTBOX`/`ANDROID_APP` 不报错，静默返回 `dropCampaigns: null` / `dropCampaign: null`；
 - `Inventory` 仍正常，所以只能看到“已经参与/有进度”的活动。
 
-为了设备码登录，本分支必须使用 SMARTBOX，因此 `catalog.py` 用公开目录 <https://twitch-drops-api.sunkwi.com/v2/drops> 做**公开元数据发现层**：
+为了设备码登录，本分支必须使用 SMARTBOX，因此 `catalog.py` 用公开目录 <https://drops.sunkwi.com/api/twitch/drops> 做**公开元数据发现层**：
 
 - 账号库存、进度、Websocket、看播和领取仍全部直连 Twitch；
 - 目录免费档为每 IP 每 5 分钟 1 次，`catalog.py` 有 310 秒最小间隔 + `catalog.cache.json` 磁盘缓存；限流时退回缓存；

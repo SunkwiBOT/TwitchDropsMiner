@@ -7,7 +7,7 @@
 “已经在进行中的活动”，任何尚未参与的活动永远发现不了。
 
 本模块只负责“公开活动元数据”的发现，账号库存、进度、Websocket、看播与领取仍然全部
-走 Twitch 自己的接口。数据源是 PR #1180 同款的公开目录（twitch-drops-api.sunkwi.com），
+走 Twitch 自己的接口。数据源是 PR #1180 同款的公开目录（drops.sunkwi.com），
 免费额度是每 IP 每 5 分钟 1 次，所以这里做了磁盘缓存 + 最小请求间隔；失败时退回缓存，
 不会把已发现的活动清空。
 
@@ -30,7 +30,7 @@ from utils import timestamp
 
 logger = logging.getLogger("TwitchDrops")
 
-CATALOG_URL = "https://twitch-drops-api.sunkwi.com/v2/drops"
+CATALOG_URL = "https://drops.sunkwi.com/api/twitch/drops"
 CACHE_PATH = WORKING_DIR / "catalog.cache.json"
 CONFIG_PATH = WORKING_DIR / "catalog.config.json"
 # 免费档：每 IP 每 5 分钟 1 次；留一点余量。用户可在设置页把刷新间隔调大。
@@ -99,7 +99,7 @@ def _load_disk_cache() -> None:
     except Exception:
         return
     payload = raw.get("payload")
-    if isinstance(payload, dict) and isinstance(payload.get("data"), list):
+    if isinstance(payload, dict) and isinstance(payload.get("games"), list):
         _cache["payload"] = payload
         _cache["fetched_at"] = float(raw.get("fetched_at") or 0)
         _cache["campaigns"] = _transform(payload)
@@ -136,7 +136,7 @@ def _prune(campaigns: dict[str, dict]) -> dict[str, dict]:
 
 def _transform(payload: dict) -> dict[str, dict]:
     """把公开目录的 groups[].rewards[] 转成 DropCampaignDetails 的形状。"""
-    groups = payload.get("data")
+    groups = payload.get("games")
     if not isinstance(groups, list):
         return {}
     now = datetime.now(timezone.utc)
@@ -251,7 +251,7 @@ async def _fetch_payload(settings: Any) -> dict | None:
     except Exception as exc:
         logger.warning("Campaign catalog: request failed: %s", exc)
         return None
-    if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+    if not isinstance(payload, dict) or not isinstance(payload.get("games"), list):
         logger.warning("Campaign catalog: invalid payload")
         return None
     return payload

@@ -51,7 +51,7 @@ bash push.sh verifyboot # 冷停 → 跑钩子 → 断言端口回来（含 auto
 **根因**：Twitch 2026-09-18 给 `ViewerDropsDashboard` / `DropCampaignDetails` 加了完整性校验。WEB 客户端报 `IntegrityCheckFailed`；SMARTBOX/ANDROID_APP 不报错，静默返回 `dropCampaigns: null` / `dropCampaign: null`。`Inventory` 仍然正常，所以只有进行中的活动可见。上游 issue #1162 与 PR #1174/#1179/#1180 记录了这个变化；我们为了设备码登录必须用 SMARTBOX，所以必然踩到。
 
 **修法**（不改上游 `.py`）：`catalog.py` 在 `run.py` 里对 `Twitch` 打两个补丁：
-- `_fetch_available_campaigns` → 改读公开目录 `https://twitch-drops-api.sunkwi.com/v2/drops`（groups[].rewards[] 与 `DropCampaignDetails` 同形）；
+- `_fetch_available_campaigns` → 改读公开目录 `https://drops.sunkwi.com/api/twitch/drops`（groups[].rewards[] 与 `DropCampaignDetails` 同形）；
 - `fetch_campaigns` → 直接返回目录条目，不再打被屏蔽的详情查询。
 账号库存、进度、Websocket、看播、领取仍全部走 Twitch；`Inventory` 数据在合并时覆盖目录数据（含 `dropInstanceID`/`isClaimed`）。
 
