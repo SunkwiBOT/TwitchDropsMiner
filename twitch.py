@@ -1504,7 +1504,7 @@ class Twitch:
         Privacy: this uses a separate cookie-less session with no Authorization
         header - no Twitch cookies or tokens are ever sent to the third party.
         """
-        catalog_url = "https://twitch-drops-api.sunkwi.com/v2/drops"
+        catalog_url = "https://drops.sunkwi.com/api/twitch/drops"
         request_kwargs: JsonType = {"headers": {"Accept": "application/json"}}
         if self.settings.proxy:
             request_kwargs["proxy"] = self.settings.proxy
@@ -1528,13 +1528,13 @@ class Twitch:
             logger.warning(f"Campaign catalog fallback failed: {exc}")
             return {}
 
-        groups = payload.get("data")
+        groups = payload.get("games")
         if not isinstance(groups, list):
             logger.warning("Campaign catalog fallback returned an invalid payload")
             return {}
 
         # Reject stale snapshots instead of presenting campaigns that may have ended.
-        last_updated_raw = payload.get("lastUpdatedAt")
+        last_updated_raw = payload.get("refreshedAt")
         refresh_interval = payload.get("refreshIntervalSeconds", 60)
         try:
             refresh_seconds = max(1, int(refresh_interval))
